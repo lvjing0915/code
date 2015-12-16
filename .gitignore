@@ -1,0 +1,79 @@
+
+
+for experi_num = 1
+    
+    data_all = [];
+    data = [];
+    raw_feature = [];
+    
+    %% sampling to avoid out of Memory
+    for seq =1:50
+        data_all(seq) = seq;
+    end
+    [row,column] = size(data_all);
+    data_sel = vl_colsubset(data_all,round(column/5)); 
+    %[Y,SEL] = vl_colsubset(X,n) randomly choose n columns from X, the chosen columns form Y and their column index is in SEL
+    
+    % training data
+    for cls_num = 1:12
+        for seq =1:length(data_sel)  %only the training data
+            data_struct = importdata([raw_feat_path,'/',char(cellstr(cls(cls_num))),'/',sprintf('%06d',data_sel(seq)),'_',char(cellstr(cls(cls_num))),'_','sobel','.mat']);  %your_path is the path that you hold all the raw feature folders
+            %             for frame = 1:1:length(data_struct.feat_raw)
+            %                 raw_feature = [raw_feature data_struct.feat_raw{1,frame}];
+            %             end
+            disp([raw_feat_path,'/',char(cellstr(cls(cls_num))),'/',sprintf('%06d',data_sel(seq)),'_',char(cellstr(cls(cls_num))),'_','sobel','.mat']);
+             for k=1:size(data_struct,2)
+                 h=size(data_struct{k},2)
+                data_struct{k} = reshape(data_struct{k},h,128);
+                 raw_feature = [raw_feature;data_struct{k}];                
+             end
+            raw_feature = [raw_feature;data_struct{k}];
+            data = [data raw_feature];
+        end
+    end    
+    
+    % generate a codebook using kmeans
+    tic;
+    numClusters = 200 ;  %k=1000, according to state-of-art
+    % data = single(data);
+    [centers,assignments] = vl_kmeans(single(data'), numClusters);
+    toc;
+    
+    kdtree = vl_kdtreebuild(centers);
+    
+    clear raw_feature data
+    data = [];
+    %generate vectors
+    for cls_num = 1:12
+        mkdir(savepath,char(cellstr(cls(cls_num))));
+        for seq = 1:50
+            data_struct = importdata([raw_feat_path,'/',char(cellstr(cls(cls_num))),'/',sprintf('%06d',seq),'_',char(cellstr(cls(cls_num))),'_','sobel','.mat']);  %your_path is the path that you hold all the raw feature folders
+            disp([raw_feat_path,'/..','.......',char(cellstr(cls(cls_num))),'/',sprintf('%06d',seq),'_',char(cellstr(cls(cls_num))),'_','sobel','.mat']);
+       
+            now_vec=zeros(1,size(centers,2));
+            
+              for k=1:size(data_struct,2)
+                 h=size(data_struct{k},2)
+                 data_struct{k} = reshape(data_struct{k},h,128); 
+                 data = [data;data_struct{k}];
+              end
+            data_struct = single(data);
+            % [row,column] = size(data_struct);
+            %             index_vec = zeros(row,1);
+            %             encoding = zeros(1000,1);
+            %             for data_point = 1:1:row
+            %                 Q = data_struct(:,data_point);
+            %                 [index,distances] = vl_kdtreequery(kdtree,centers,Q);
+            %                 index_vec(data_point) = index;
+            %                 encoding(index) = encoding(index)+1;
+            %             end
+            
+            [index,~]=vl_kdtreequery(kdtree,centers,data_struct');
+            for i=1:size(index,2)
+                now_vec(index(i))=now_vec(index(i))+1;
+            end
+            now_vec=now_vec./sum(now_vec);
+            save([savepath,'/',char(cellstr(cls(cls_num))),'/',sprintf('%06d',seq),'_',char(cellstr(cls(cls_num))),'_','sobel','.mat'],'now_vec');   %storage path is the path that you hold all the BoW vectors
+        end
+    end
+end
